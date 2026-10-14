@@ -1,7 +1,7 @@
 
 import streamlit as st
 import pandas as pd
-
+from core.cpu_scheduler import fcfs, round_robin
 from database.db import (
     init_db,
     get_resources,
@@ -70,13 +70,14 @@ c4.metric(
 
 st.divider()
 
-overview, process_tab, resource_tab, request_tab, history_tab = st.tabs(
+overview, process_tab, resource_tab, request_tab, history_tab , cpu_tab= st.tabs(
     [
         "Overview",
         "Process Management",
         "Resource Management",
         "Resource Requests",
         "Event History",
+        "CPU Scheduling",
     ]
 )
 
@@ -308,6 +309,156 @@ with history_tab:
         )
     else:
         st.info("No events recorded yet.")
+
+
+with cpu_tab:
+    st.header("CPU Scheduling")
+
+    st.write(
+        "Compare FCFS and Round Robin scheduling using "
+        "process arrival times and CPU burst times."
+    )
+
+    algorithm = st.selectbox(
+        "Scheduling Algorithm",
+        ["FCFS", "Round Robin"],
+    )
+
+    count = st.number_input(
+        "Number of processes",
+        min_value=1,
+        max_value=10,
+        value=3,
+        step=1,
+    )
+
+    processes = []
+
+    st.subheader("Process Details")
+
+    for i in range(int(count)):
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+            pid = st.text_input(
+                f"Process ID {i + 1}",
+                value=f"P{i + 1}",
+                key=f"sched_pid_{i}",
+            )
+
+        with c2:
+            arrival = st.number_input(
+                f"Arrival Time {i + 1}",
+                min_value=0,
+                value=0,
+                step=1,
+                key=f"sched_arrival_{i}",
+            )
+
+        with c3:
+            burst = st.number_input(
+                f"Burst Time {i + 1}",
+                min_value=1,
+                value=3,
+                step=1,
+                key=f"sched_burst_{i}",
+            )
+
+        processes.append({
+            "pid": pid.strip(),
+            "arrival": int(arrival),
+            "burst": int(burst),
+        })
+
+    quantum = 2
+
+    if algorithm == "Round Robin":
+        quantum = st.number_input(
+            "Time Quantum",
+            min_value=1,
+            value=2,
+            step=1,
+        )
+
+    if st.button("Run Scheduling", type="primary"):
+        ids = [p["pid"] for p in processes]
+
+        if any(not pid for pid in ids):
+            st.error("Process IDs cannot be empty.")
+        elif len(ids) != len(set(ids)):
+            st.error("Each process ID must be unique.")
+        else:
+            if algorithm == "FCFS":
+                results, timeline = fcfs(processes)
+            else:
+                results, timeline = round_robin(
+                    processes, int(quantum)
+                )
+
+            st.subheader("Scheduling Results")
+            st.dataframe(results, use_container_width=True)
+
+            avg_wait = sum(
+                p["waiting"] for p in results
+            ) / len(results)
+
+            avg_turnaround = sum(
+                p["turnaround"] for p in results
+            ) / len(results)
+
+            c1, c2 = st.columns(2)
+            c1.metric("Average Waiting Time", f"{avg_wait:.2f}")
+            c2.metric(
+                "Average Turnaround Time",
+                f"{avg_turnaround:.2f}",
+            )
+
+            
+            import plotly.graph_objects as go
+
+            st.subheader("Gantt Chart")
+
+            fig = go.Figure()
+
+            for event in timeline:
+                start = event["start"]
+                finish = event["finish"]
+                pid = event["pid"]
+
+                fig.add_trace(
+                    go.Bar(
+                        x=[finish - start],
+                        y=[pid],
+                        base=[start],
+                        orientation="h",
+                        name=pid,
+                        hovertemplate=(
+                            "Process: " + pid +
+                            "<br>Start time: %{base}" +
+                            "<br>Duration: %{x}" +
+                            "<extra></extra>"
+                        ),
+                    )
+                )
+
+            final_time = max(event["finish"] for event in timeline)
+
+            fig.update_layout(
+                title=f"{algorithm} Scheduling Timeline",
+                xaxis_title="CPU Time",
+                yaxis_title="Process",
+                barmode="overlay",
+                showlegend=False,
+                xaxis=dict(
+                    range=[0, final_time],
+                    dtick=1,
+                    zeroline=True,
+                ),
+                height=350,
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
 
 st.divider()
 st.caption(
