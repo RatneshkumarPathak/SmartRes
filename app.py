@@ -77,15 +77,14 @@ c4.metric(
 
 st.divider()
 
-overview, process_tab, resource_tab, request_tab, history_tab , cpu_tab, sim_tab= st.tabs(
+overview, process_tab, resource_tab, request_tab, history_tab, cpu_tab = st.tabs(
     [
         "Overview",
         "Process Management",
         "Resource Management",
         "Resource Requests",
         "Event History",
-        "CPU Scheduling",
-        "Execution Simulator",
+        "CPU Scheduling Lab",
     ]
 )
 
@@ -446,67 +445,53 @@ with history_tab:
 
 
 with cpu_tab:
-    st.subheader("CPU Scheduling Comparison Lab")
-
+    st.subheader("CPU Scheduling Lab")
     st.write(
-        "Run six CPU scheduling algorithms on the same workload and compare "
-        "their execution order, waiting time, turnaround time, and CPU utilisation."
+        "Configure one workload, compare all six scheduling algorithms, "
+        "and then step through any algorithm using the same processes."
     )
     st.info(
-        "All algorithms receive identical arrival times, burst times, and priorities. "
-        "A smaller priority number means a higher priority. Algorithms that do not "
-        "use priority simply ignore that input."
+        "All six algorithms use the same arrival times, CPU burst times, and priorities. "
+        "A smaller priority number means a higher priority. SJF/SRTF use the supplied "
+        "burst lengths; context-switch overhead is not modelled."
     )
 
-    count = st.number_input(
+    st.markdown("### 1. Configure the shared workload")
+    process_count = st.number_input(
         "Number of processes",
         min_value=1,
         max_value=10,
         value=3,
         step=1,
-        key="comparison_process_count",
+        key="shared_process_count",
+    )
+    st.caption(
+        "Arrival = when a process enters the ready queue · Burst = total CPU time needed · "
+        "Priority = smaller number means higher priority."
     )
 
     scheduling_processes = []
-    st.markdown("### Workload Configuration")
-    st.caption(
-        "Arrival Time: when a process enters the ready queue. "
-        "Burst Time: total CPU time required. Priority: smaller number = higher priority."
-    )
-
-    for i in range(int(count)):
+    for i in range(int(process_count)):
         c1, c2, c3, c4 = st.columns(4)
-
         with c1:
             pid = st.text_input(
-                f"Process ID {i + 1}",
-                value=f"P{i + 1}",
-                key=f"comparison_pid_{i}",
+                f"Process ID {i + 1}", value=f"P{i + 1}", key=f"shared_pid_{i}"
             )
         with c2:
             arrival = st.number_input(
-                f"Arrival Time {i + 1}",
-                min_value=0,
-                value=0,
-                step=1,
-                key=f"comparison_arrival_{i}",
+                f"Arrival {i + 1}", min_value=0, value=0, step=1,
+                key=f"shared_arrival_{i}"
             )
         with c3:
             burst = st.number_input(
-                f"Burst Time {i + 1}",
-                min_value=1,
-                value=3,
-                step=1,
-                key=f"comparison_burst_{i}",
+                f"Burst {i + 1}", min_value=1, value=3, step=1,
+                key=f"shared_burst_{i}"
             )
         with c4:
             priority = st.number_input(
-                f"Priority {i + 1}",
-                min_value=0,
-                value=1,
-                step=1,
-                key=f"comparison_priority_{i}",
-                help="Lower number means higher priority.",
+                f"Priority {i + 1}", min_value=0, value=1, step=1,
+                key=f"shared_priority_{i}",
+                help="Lower number means higher priority."
             )
 
         scheduling_processes.append({
@@ -517,278 +502,26 @@ with cpu_tab:
         })
 
     quantum = st.number_input(
-        "Round Robin Time Quantum",
+        "Round Robin time quantum",
         min_value=1,
         value=2,
         step=1,
-        key="comparison_quantum",
-        help="Maximum CPU time a process can use in one turn before returning to the ready queue.",
+        key="shared_quantum",
+        help="Maximum CPU time a process can use in one turn before returning to the ready queue."
     )
 
-    if st.button(
-        "Compare All Six Algorithms",
-        type="primary",
-        use_container_width=True,
-    ):
-        ids = [p["pid"] for p in scheduling_processes]
+    workload_signature = tuple(
+        (p["pid"], p["arrival"], p["burst"], p["priority"])
+        for p in scheduling_processes
+    )
 
+    def validate_workload(workload):
+        ids = [p["pid"] for p in workload]
         if any(not pid for pid in ids):
-            st.error("Process IDs cannot be empty.")
-        elif len(ids) != len(set(ids)):
-            st.error("Every process must have a unique ID.")
-        else:
-            algorithms = {
-                "FCFS": lambda: fcfs(scheduling_processes),
-                "SJF": lambda: sjf(scheduling_processes),
-                "SRTF": lambda: srtf(scheduling_processes),
-                "Priority": lambda: priority_scheduling(scheduling_processes),
-                "Preemptive Priority": lambda: preemptive_priority(scheduling_processes),
-                "Round Robin": lambda: round_robin(scheduling_processes, int(quantum)),
-            }
-
-            try:
-                algorithm_outputs = {
-                    name: run() for name, run in algorithms.items()
-                }
-            except ValueError as exc:
-                st.error(f"Invalid scheduling input: {exc}")
-                algorithm_outputs = {}
-
-            if algorithm_outputs:
-                total_burst = sum(p["burst"] for p in scheduling_processes)
-
-                def calculate_metrics(results):
-                    makespan = max(p["completion"] for p in results)
-                    average_waiting = sum(p["waiting"] for p in results) / len(results)
-                    average_turnaround = sum(
-                        p["turnaround"] for p in results
-                    ) / len(results)
-                    return {
-                        "Average Waiting Time": average_waiting,
-                        "Average Turnaround Time": average_turnaround,
-                        "CPU Utilisation (%)": (
-                            total_burst / makespan * 100 if makespan else 0
-                        ),
-                        "Throughput (processes/unit time)": (
-                            len(results) / makespan if makespan else 0
-                        ),
-                        "Total Completion Time": makespan,
-                    }
-
-                metrics = {
-                    name: calculate_metrics(output[0])
-                    for name, output in algorithm_outputs.items()
-                }
-
-                st.session_state["scheduling_comparison"] = {
-                    "processes": scheduling_processes,
-                    "quantum": int(quantum),
-                    "outputs": algorithm_outputs,
-                    "metrics": metrics,
-                }
-
-    # Keep the last comparison visible when another widget causes a rerun.
-    if "scheduling_comparison" in st.session_state:
-        comparison_data = st.session_state["scheduling_comparison"]
-        outputs = comparison_data["outputs"]
-        metrics = comparison_data["metrics"]
-
-        st.divider()
-        st.markdown("## Performance Comparison")
-
-        metric_rows = []
-        for metric_name in next(iter(metrics.values())):
-            row = {"Metric": metric_name}
-            for algorithm_name in metrics:
-                row[algorithm_name] = round(
-                    metrics[algorithm_name][metric_name], 2
-                )
-            metric_rows.append(row)
-
-        st.dataframe(
-            pd.DataFrame(metric_rows),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        st.caption(
-            "CPU utilisation = total useful CPU burst time ÷ elapsed time "
-            "from time 0 to the final completion. Throughput = completed "
-            "processes ÷ that elapsed time. Context-switch overhead is not modelled."
-        )
-
-        st.divider()
-        st.markdown("## Gantt Chart Comparison")
-
-        import plotly.graph_objects as go
-
-        def create_gantt(timeline, title):
-            fig = go.Figure()
-            for event in timeline:
-                start = event["start"]
-                finish = event["finish"]
-                pid = str(event["pid"])
-                fig.add_trace(
-                    go.Bar(
-                        x=[finish - start],
-                        y=[pid],
-                        base=[start],
-                        orientation="h",
-                        name=pid,
-                        hovertemplate=(
-                            "Process: " + pid
-                            + "<br>Start: %{base}"
-                            + "<br>Duration: %{x}"
-                            + "<extra></extra>"
-                        ),
-                    )
-                )
-
-            makespan = max(event["finish"] for event in timeline)
-            fig.update_layout(
-                title=title,
-                xaxis_title="CPU Time",
-                yaxis_title="Process",
-                barmode="overlay",
-                showlegend=False,
-                xaxis=dict(range=[0, makespan], dtick=1, zeroline=True),
-                height=300,
-                margin=dict(l=20, r=20, t=45, b=35),
-            )
-            return fig
-
-        algorithm_names = list(outputs.keys())
-        for row_start in range(0, len(algorithm_names), 2):
-            left, right = st.columns(2)
-            for column, algorithm_name in zip(
-                (left, right), algorithm_names[row_start:row_start + 2]
-            ):
-                with column:
-                    st.plotly_chart(
-                        create_gantt(
-                            outputs[algorithm_name][1],
-                            f"{algorithm_name} Timeline",
-                        ),
-                        use_container_width=True,
-                    )
-
-        st.divider()
-        st.markdown("## Process-wise Results")
-        for algorithm_name, (results, _) in outputs.items():
-            with st.expander(f"{algorithm_name} — process metrics"):
-                st.dataframe(
-                    pd.DataFrame(results),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-        st.divider()
-        st.markdown("## What Each Algorithm Does")
-
-        explanations = {
-            "FCFS": (
-                "Runs processes in arrival order. It is simple and non-preemptive, "
-                "but a long process at the front can make short processes wait."
-            ),
-            "SJF": (
-                "Among processes that have already arrived, chooses the one with "
-                "the shortest full CPU burst. It is non-preemptive; a running job "
-                "is not interrupted."
-            ),
-            "SRTF": (
-                "Chooses the ready process with the smallest remaining CPU time. "
-                "A newly arrived shorter job can preempt the current process."
-            ),
-            "Priority": (
-                "Chooses the ready process with the highest priority (smallest "
-                "priority number). It is non-preemptive."
-            ),
-            "Preemptive Priority": (
-                "Runs the highest-priority ready process and interrupts the current "
-                "process when a higher-priority process arrives."
-            ),
-            "Round Robin": (
-                f"Gives each ready process up to {comparison_data['quantum']} CPU "
-                "time units per turn. An unfinished process goes to the back of "
-                "the ready queue, improving sharing and responsiveness."
-            ),
-        }
-
-        for algorithm_name, explanation in explanations.items():
-            st.markdown(f"**{algorithm_name}:** {explanation}")
-
-        st.warning(
-            "Priority scheduling can cause starvation for low-priority processes. "
-            "SJF/SRTF depend on knowing or estimating CPU burst lengths. "
-            "Round Robin's behaviour depends strongly on its time quantum."
-        )
-
-
-with sim_tab:
-    st.subheader("OS Process Execution Simulator")
-
-    st.write(
-        "Follow CPU execution one segment at a time. Observe how processes "
-        "arrive, wait, execute, get preempted, and complete."
-    )
-    st.info(
-        "This is a scheduling simulation, not execution of real operating-system "
-        "processes. Smaller priority numbers represent higher priority."
-    )
-
-    sim_count = st.number_input(
-        "Number of processes",
-        min_value=1,
-        max_value=10,
-        value=3,
-        step=1,
-        key="sim_process_count",
-    )
-
-    sim_processes = []
-    st.markdown("### Process Configuration")
-
-    for i in range(int(sim_count)):
-        c1, c2, c3, c4 = st.columns(4)
-
-        with c1:
-            sim_pid = st.text_input(
-                f"Process ID {i + 1}",
-                value=f"P{i + 1}",
-                key=f"sim_pid_{i}",
-            )
-        with c2:
-            sim_arrival = st.number_input(
-                f"Arrival Time {i + 1}",
-                min_value=0,
-                value=0,
-                step=1,
-                key=f"sim_arrival_{i}",
-            )
-        with c3:
-            sim_burst = st.number_input(
-                f"Burst Time {i + 1}",
-                min_value=1,
-                value=3,
-                step=1,
-                key=f"sim_burst_{i}",
-            )
-        with c4:
-            sim_priority = st.number_input(
-                f"Priority {i + 1}",
-                min_value=0,
-                value=1,
-                step=1,
-                key=f"sim_priority_{i}",
-                help="Lower number means higher priority.",
-            )
-
-        sim_processes.append({
-            "pid": sim_pid.strip(),
-            "arrival": int(sim_arrival),
-            "burst": int(sim_burst),
-            "priority": int(sim_priority),
-        })
+            return "Process IDs cannot be empty."
+        if len(ids) != len(set(ids)):
+            return "Every process must have a unique ID."
+        return None
 
     algorithm_functions = {
         "FCFS": fcfs,
@@ -799,240 +532,375 @@ with sim_tab:
         "Round Robin": round_robin,
     }
 
-    sim_algorithm = st.selectbox(
-        "Scheduling Algorithm",
-        list(algorithm_functions.keys()),
-        key="sim_algorithm",
+    comparison_section, playback_section = st.tabs(
+        ["Compare all six algorithms", "Execution playback"]
     )
 
-    sim_quantum = 2
-    if sim_algorithm == "Round Robin":
-        sim_quantum = st.number_input(
-            "Time Quantum",
-            min_value=1,
-            value=2,
-            step=1,
-            key="sim_time_quantum",
+    with comparison_section:
+        st.markdown("### 2. Compare scheduling performance")
+        st.write(
+            "Run every algorithm against the exact same workload. Compare average "
+            "waiting time, turnaround time, CPU utilisation, throughput, and completion time."
         )
 
-    if st.button(
-        "Generate Execution Simulation",
-        type="primary",
-        use_container_width=True,
-    ):
-        ids = [p["pid"] for p in sim_processes]
-
-        if any(not pid for pid in ids):
-            st.error("Process IDs cannot be empty.")
-        elif len(ids) != len(set(ids)):
-            st.error("Process IDs must be unique.")
-        else:
-            try:
-                if sim_algorithm == "Round Robin":
-                    sim_results, sim_timeline = round_robin(
-                        sim_processes, int(sim_quantum)
-                    )
-                else:
-                    sim_results, sim_timeline = algorithm_functions[
-                        sim_algorithm
-                    ](sim_processes)
-
-                st.session_state["sim_data"] = {
-                    "algorithm": sim_algorithm,
-                    "processes": sim_processes,
-                    "results": sim_results,
-                    "timeline": sim_timeline,
-                    "quantum": int(sim_quantum),
-                }
-                st.session_state["sim_step"] = 0
-            except ValueError as exc:
-                st.error(f"Invalid scheduling input: {exc}")
-
-    if "sim_data" in st.session_state:
-        data = st.session_state["sim_data"]
-        timeline = data["timeline"]
-        configured_processes = data["processes"]
-
-        if not timeline:
-            st.warning("No execution timeline was generated.")
-        else:
-            st.divider()
-            st.markdown("## Execution Playback")
-            st.write(f"Algorithm: **{data['algorithm']}**")
-
-            if data["algorithm"] == "Round Robin":
-                st.write(f"Time Quantum: **{data['quantum']} units**")
-
-            total_steps = len(timeline)
-            step = st.slider(
-                "Move through execution",
-                min_value=0,
-                max_value=total_steps,
-                value=min(st.session_state.get("sim_step", 0), total_steps),
-                key="sim_step",
-                help=(
-                    "Step 0 is before execution. Each next step completes "
-                    "one CPU execution segment."
-                ),
-            )
-
-            if step == 0:
-                previous_finish = 0
+        if st.button(
+            "Run comparison of all six algorithms",
+            type="primary",
+            use_container_width=True,
+            key="run_scheduling_comparison",
+        ):
+            validation_error = validate_workload(scheduling_processes)
+            if validation_error:
+                st.error(validation_error)
             else:
-                previous_finish = timeline[step - 1]["finish"]
+                try:
+                    outputs = {}
+                    for name, function in algorithm_functions.items():
+                        if name == "Round Robin":
+                            outputs[name] = function(scheduling_processes, int(quantum))
+                        else:
+                            outputs[name] = function(scheduling_processes)
 
-            next_event = timeline[step] if step < total_steps else None
-            current_time = (
-                next_event["start"] if next_event is not None else previous_finish
-            )
+                    total_burst = sum(p["burst"] for p in scheduling_processes)
 
-            st.progress(
-                step / total_steps,
-                text=f"Execution progress: {step}/{total_steps} segments completed",
-            )
+                    def calculate_metrics(results):
+                        makespan = max(p["completion"] for p in results)
+                        return {
+                            "Average Waiting Time": sum(p["waiting"] for p in results) / len(results),
+                            "Average Turnaround Time": sum(p["turnaround"] for p in results) / len(results),
+                            "CPU Utilisation (%)": total_burst / makespan * 100 if makespan else 0,
+                            "Throughput (processes/unit time)": len(results) / makespan if makespan else 0,
+                            "Final Completion Time": makespan,
+                        }
 
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Current Simulation Time", current_time)
-            c2.metric("Completed Segments", step)
-            c3.metric("Remaining Segments", total_steps - step)
+                    metrics = {
+                        name: calculate_metrics(output[0])
+                        for name, output in outputs.items()
+                    }
+                    st.session_state["scheduling_comparison"] = {
+                        "signature": workload_signature,
+                        "quantum": int(quantum),
+                        "outputs": outputs,
+                        "metrics": metrics,
+                    }
+                except ValueError as exc:
+                    st.error(f"Could not run the comparison: {exc}")
 
-            process_states = []
-            for process in configured_processes:
-                pid = process["pid"]
-                burst = process["burst"]
-                arrival = process["arrival"]
+        comparison_data = st.session_state.get("scheduling_comparison")
+        if comparison_data and comparison_data["signature"] != workload_signature:
+            st.info("The workload has changed. Run the comparison again to refresh these results.")
+        elif comparison_data:
+            outputs = comparison_data["outputs"]
+            metrics = comparison_data["metrics"]
 
-                executed = sum(
-                    event["finish"] - event["start"]
-                    for event in timeline[:step]
-                    if event["pid"] == pid
-                )
-                remaining = burst - executed
-
-                if remaining == 0:
-                    status = "Completed"
-                elif next_event is not None and next_event["pid"] == pid:
-                    status = "Running next"
-                elif arrival > current_time:
-                    status = "Not Arrived"
-                else:
-                    status = "Ready / Waiting"
-
-                process_states.append({
-                    "Process": pid,
-                    "Arrival": arrival,
-                    "Burst": burst,
-                    "Priority": process.get("priority", 0),
-                    "Executed": executed,
-                    "Remaining": remaining,
-                    "Status": status,
-                })
-
-            st.markdown("### Current Process States")
+            st.divider()
+            st.markdown("#### Performance summary")
+            metric_rows = []
+            for metric_name in next(iter(metrics.values())):
+                row = {"Metric": metric_name}
+                for algorithm_name, values in metrics.items():
+                    row[algorithm_name] = round(values[metric_name], 2)
+                metric_rows.append(row)
             st.dataframe(
-                pd.DataFrame(process_states),
+                pd.DataFrame(metric_rows),
                 use_container_width=True,
                 hide_index=True,
             )
+            st.caption(
+                "Lower is generally better for waiting, turnaround, and completion time; "
+                "higher is generally better for throughput and utilisation. Utilisation = "
+                "total CPU burst ÷ elapsed time from time 0 to final completion. "
+                "Throughput = process count ÷ the same elapsed time. Idle gaps are included; "
+                "context-switch overhead is not modelled."
+            )
 
-            st.markdown("### What is happening now?")
-            if next_event is None:
-                st.success(
-                    "All processes have completed execution. "
-                    "The CPU scheduling simulation is finished."
-                )
-            else:
-                idle_time = next_event["start"] - previous_finish
-                if idle_time > 0:
-                    st.warning(
-                        f"The CPU was idle for {idle_time} time units because "
-                        "no process was ready."
-                    )
-
-                explanation = {
-                    "FCFS": "The earliest-arrived waiting process gets the CPU and runs to completion.",
-                    "SJF": "The ready process with the shortest full burst is selected; it is not preempted.",
-                    "SRTF": "The ready process with the shortest remaining time is selected; arrivals can cause preemption.",
-                    "Priority": "The ready process with the smallest priority number is selected; it is not preempted.",
-                    "Preemptive Priority": "The ready process with the smallest priority number runs; a higher-priority arrival can preempt it.",
-                    "Round Robin": "The process receives up to one time quantum. If unfinished, it returns to the back of the ready queue.",
-                }[data["algorithm"]]
-
-                st.success(
-                    f"{next_event['pid']} is scheduled from time "
-                    f"{next_event['start']} to {next_event['finish']}."
-                )
-                st.caption(explanation)
-                st.caption(
-                    "Move the slider one step forward to complete this execution segment."
-                )
-
+            st.markdown("#### Gantt chart comparison")
             import plotly.graph_objects as go
 
-            fig = go.Figure()
-            for index, event in enumerate(timeline):
-                fig.add_trace(
-                    go.Bar(
-                        x=[event["finish"] - event["start"]],
-                        y=[event["pid"]],
-                        base=[event["start"]],
+            process_ids = [p["pid"] for p in scheduling_processes]
+            palette = [
+                "#4C78A8", "#F58518", "#54A24B", "#E45756", "#72B7B2",
+                "#B279A2", "#FF9DA6", "#9D755D", "#BAB0AC", "#79706E"
+            ]
+            process_colors = {
+                pid: palette[index % len(palette)]
+                for index, pid in enumerate(process_ids)
+            }
+
+            def create_gantt(timeline, title):
+                fig = go.Figure()
+                for event in timeline:
+                    pid = event["pid"]
+                    start = event["start"]
+                    finish = event["finish"]
+                    fig.add_trace(go.Bar(
+                        x=[finish - start],
+                        y=[pid],
+                        base=[start],
                         orientation="h",
-                        name=event["pid"],
-                        opacity=1.0 if index < step else 0.35,
+                        marker_color=process_colors.get(pid, "#777777"),
+                        name=pid,
                         hovertemplate=(
-                            f"Process: {event['pid']}"
-                            "<br>Start: %{base}"
-                            "<br>Duration: %{x}"
-                            "<extra></extra>"
+                            f"Process: {pid}<br>Start: {start}<br>Finish: {finish}"
+                            f"<br>Duration: {finish - start}<extra></extra>"
                         ),
-                    )
+                    ))
+                final_time = max(event["finish"] for event in timeline)
+                fig.update_layout(
+                    title=title,
+                    xaxis_title="CPU time",
+                    yaxis_title="Process",
+                    barmode="overlay",
+                    showlegend=False,
+                    xaxis=dict(range=[0, final_time], dtick=1, zeroline=True),
+                    height=270,
+                    margin=dict(l=20, r=15, t=45, b=35),
                 )
+                return fig
 
-            final_time = max(event["finish"] for event in timeline)
-            fig.add_vline(
-                x=current_time,
-                line_dash="dash",
-                line_width=2,
-                annotation_text="Current time",
+            st.caption(
+                "Each colour represents the same process across all charts. Blank spaces "
+                "on the time axis indicate periods when the CPU is idle."
             )
-            fig.update_layout(
-                title="CPU Execution Timeline",
-                xaxis_title="Simulation Time",
-                yaxis_title="Process",
-                barmode="overlay",
-                showlegend=False,
-                xaxis=dict(range=[0, final_time], dtick=1),
-                height=350,
+            algorithm_names = list(outputs)
+            for row_start in range(0, len(algorithm_names), 2):
+                left, right = st.columns(2)
+                for column, algorithm_name in zip(
+                    (left, right), algorithm_names[row_start:row_start + 2]
+                ):
+                    with column:
+                        st.plotly_chart(
+                            create_gantt(outputs[algorithm_name][1], algorithm_name),
+                            use_container_width=True,
+                        )
+
+            st.markdown("#### Process-wise completion metrics")
+            for algorithm_name, (results, _) in outputs.items():
+                with st.expander(f"{algorithm_name} — detailed results"):
+                    st.dataframe(
+                        pd.DataFrame(results),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+            st.markdown("#### How to interpret the six algorithms")
+            explanations = {
+                "FCFS": "Runs ready processes in arrival order, without interruption. Simple, but a long job can delay short jobs (convoy effect).",
+                "SJF": "Selects the ready process with the shortest full CPU burst. It is non-preemptive and can reduce average waiting under suitable assumptions when burst lengths are known.",
+                "SRTF": "Selects the ready process with the least remaining CPU time. A newly arrived shorter job can preempt the current process.",
+                "Priority": "Selects the ready process with the smallest priority number. It is non-preemptive; low-priority processes may starve.",
+                "Preemptive Priority": "Runs the highest-priority ready process and preempts the current one when a higher-priority process becomes ready. Starvation is possible.",
+                "Round Robin": f"Gives each ready process up to {comparison_data['quantum']} time units per turn. Unfinished processes return to the back of the ready queue; the quantum controls responsiveness and switching frequency.",
+            }
+            for name, explanation in explanations.items():
+                st.markdown(f"**{name}:** {explanation}")
+
+    with playback_section:
+        st.markdown("### 3. Step through any scheduling algorithm")
+        st.write(
+            "The simulator uses the workload configured above. Select an algorithm, "
+            "generate its timeline, and move through the execution segments."
+        )
+        selected_algorithm = st.selectbox(
+            "Algorithm to simulate",
+            list(algorithm_functions),
+            key="shared_sim_algorithm",
+        )
+        sim_quantum = int(quantum)
+        if selected_algorithm == "Round Robin":
+            sim_quantum = st.number_input(
+                "Simulation time quantum",
+                min_value=1,
+                value=int(quantum),
+                step=1,
+                key="shared_sim_quantum",
             )
-            st.plotly_chart(fig, use_container_width=True)
 
-            previous_col, next_col = st.columns(2)
-            with previous_col:
-                if st.button(
-                    "← Previous Step",
-                    disabled=(step == 0),
-                    use_container_width=True,
-                ):
-                    st.session_state["sim_step"] = step - 1
-                    st.rerun()
+        if st.button(
+            "Generate playback for this workload",
+            type="primary",
+            use_container_width=True,
+            key="generate_shared_playback",
+        ):
+            validation_error = validate_workload(scheduling_processes)
+            if validation_error:
+                st.error(validation_error)
+            else:
+                try:
+                    if selected_algorithm == "Round Robin":
+                        sim_results, sim_timeline = round_robin(
+                            scheduling_processes, int(sim_quantum)
+                        )
+                    else:
+                        sim_results, sim_timeline = algorithm_functions[selected_algorithm](
+                            scheduling_processes
+                        )
+                    st.session_state["sim_data"] = {
+                        "signature": workload_signature,
+                        "algorithm": selected_algorithm,
+                        "processes": [dict(p) for p in scheduling_processes],
+                        "results": sim_results,
+                        "timeline": sim_timeline,
+                        "quantum": int(sim_quantum),
+                    }
+                    st.session_state["sim_step"] = 0
+                except ValueError as exc:
+                    st.error(f"Could not generate playback: {exc}")
 
-            with next_col:
-                if st.button(
-                    "Next Step →",
-                    disabled=(step == total_steps),
-                    type="primary",
-                    use_container_width=True,
-                ):
-                    st.session_state["sim_step"] = step + 1
-                    st.rerun()
+        data = st.session_state.get("sim_data")
+        if data and data["signature"] != workload_signature:
+            st.info("The workload has changed. Generate playback again to simulate the updated processes.")
+        elif data:
+            timeline = data["timeline"]
+            configured_processes = data["processes"]
+            if not timeline:
+                st.warning("No execution timeline was generated.")
+            else:
+                st.divider()
+                st.markdown(f"#### Execution playback — {data['algorithm']}")
+                if data["algorithm"] == "Round Robin":
+                    st.caption(f"Time quantum: {data['quantum']} time units")
 
-            with st.expander("View final scheduling results"):
+                total_steps = len(timeline)
+                step = st.slider(
+                    "Execution segment",
+                    min_value=0,
+                    max_value=total_steps,
+                    value=min(st.session_state.get("sim_step", 0), total_steps),
+                    key="sim_step",
+                    help="Step 0 is before execution. Each step completes one continuous CPU segment.",
+                )
+                previous_finish = timeline[step - 1]["finish"] if step else 0
+                next_event = timeline[step] if step < total_steps else None
+                current_time = next_event["start"] if next_event else previous_finish
+
+                st.progress(
+                    step / total_steps,
+                    text=f"{step} of {total_steps} execution segments completed",
+                )
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Simulation time", current_time)
+                c2.metric("Segments completed", step)
+                c3.metric("Segments remaining", total_steps - step)
+
+                process_states = []
+                for process in configured_processes:
+                    pid = process["pid"]
+                    executed = sum(
+                        event["finish"] - event["start"]
+                        for event in timeline[:step]
+                        if event["pid"] == pid
+                    )
+                    remaining = process["burst"] - executed
+                    if remaining == 0:
+                        status = "Completed"
+                    elif next_event is not None and next_event["pid"] == pid:
+                        status = "Next to run"
+                    elif process["arrival"] > current_time:
+                        status = "Not arrived"
+                    else:
+                        status = "Ready / waiting"
+                    process_states.append({
+                        "Process": pid,
+                        "Arrival": process["arrival"],
+                        "Burst": process["burst"],
+                        "Priority": process.get("priority", 0),
+                        "Executed": executed,
+                        "Remaining": remaining,
+                        "Status": status,
+                    })
+
+                st.markdown("#### Process states at this step")
                 st.dataframe(
-                    pd.DataFrame(data["results"]),
+                    pd.DataFrame(process_states),
                     use_container_width=True,
                     hide_index=True,
                 )
 
+                st.markdown("#### Scheduling decision")
+                if next_event is None:
+                    st.success("All processes have completed. The simulation is finished.")
+                else:
+                    idle_time = next_event["start"] - previous_finish
+                    if idle_time > 0:
+                        st.warning(
+                            f"The CPU is idle for {idle_time} time unit(s) because no process is ready."
+                        )
+                    decision_text = {
+                        "FCFS": "The earliest-arrived process in the ready queue is selected and runs until completion.",
+                        "SJF": "The ready process with the shortest full CPU burst is selected; it is not interrupted once running.",
+                        "SRTF": "The ready process with the shortest remaining CPU time is selected; a shorter newly arrived job can preempt it.",
+                        "Priority": "The ready process with the smallest priority value is selected; it runs without preemption.",
+                        "Preemptive Priority": "The ready process with the smallest priority value is selected; a higher-priority arrival can preempt it.",
+                        "Round Robin": f"The next process in the ready queue receives up to {data['quantum']} time unit(s). If unfinished, it returns to the queue's end.",
+                    }[data["algorithm"]]
+                    st.success(
+                        f"{next_event['pid']} is scheduled from time {next_event['start']} "
+                        f"to {next_event['finish']}."
+                    )
+                    st.caption(decision_text)
+
+                import plotly.graph_objects as go
+                palette = [
+                    "#4C78A8", "#F58518", "#54A24B", "#E45756", "#72B7B2",
+                    "#B279A2", "#FF9DA6", "#9D755D", "#BAB0AC", "#79706E"
+                ]
+                process_colors = {
+                    p["pid"]: palette[index % len(palette)]
+                    for index, p in enumerate(configured_processes)
+                }
+                fig = go.Figure()
+                for index, event in enumerate(timeline):
+                    pid = event["pid"]
+                    fig.add_trace(go.Bar(
+                        x=[event["finish"] - event["start"]],
+                        y=[pid],
+                        base=[event["start"]],
+                        orientation="h",
+                        marker_color=process_colors.get(pid, "#777777"),
+                        opacity=1.0 if index < step else 0.35,
+                        name=pid,
+                        hovertemplate=(
+                            f"Process: {pid}<br>Start: {event['start']}"
+                            f"<br>Finish: {event['finish']}<extra></extra>"
+                        ),
+                    ))
+                final_time = max(event["finish"] for event in timeline)
+                fig.add_vline(
+                    x=current_time,
+                    line_dash="dash",
+                    line_width=2,
+                    annotation_text="Current time",
+                )
+                fig.update_layout(
+                    title="CPU execution timeline",
+                    xaxis_title="Simulation time",
+                    yaxis_title="Process",
+                    barmode="overlay",
+                    showlegend=False,
+                    xaxis=dict(range=[0, final_time], dtick=1),
+                    height=330,
+                    margin=dict(l=20, r=15, t=45, b=35),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.caption("Completed segments are shown at full opacity; upcoming segments are faded. Blank gaps indicate CPU idle time.")
+
+                previous_col, next_col = st.columns(2)
+                with previous_col:
+                    if st.button("← Previous segment", disabled=(step == 0), use_container_width=True):
+                        st.session_state["sim_step"] = step - 1
+                        st.rerun()
+                with next_col:
+                    if st.button("Next segment →", disabled=(step == total_steps), type="primary", use_container_width=True):
+                        st.session_state["sim_step"] = step + 1
+                        st.rerun()
+
+                with st.expander("View final process metrics"):
+                    st.dataframe(
+                        pd.DataFrame(data["results"]),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
 st.divider()
 st.caption(
