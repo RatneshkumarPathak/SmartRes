@@ -51,10 +51,9 @@ All six algorithms can be evaluated using a common configured workload.
 |---|---|
 | Python | Core application logic and algorithms |
 | Streamlit | Interactive web application |
-| SQLite | Persistent application database |
+| MySQL | Persistent application database |
 | Plotly | Scheduling visualisations |
 | Pandas | Data handling |
-| Oracle 11g SQL | Separate DBMS schema and reporting deliverable |
 | Pytest | Automated testing |
 
 ## Project Structure
@@ -118,7 +117,7 @@ python -m pytest -q
 
 The running application uses SQLite for persistent application data.
 
-The project also includes a separate Oracle 11g DBMS deliverable containing database schema definitions and SQL reports. The Oracle scripts are maintained separately and are not currently integrated with the live Streamlit application's SQLite database.
+The project also includes a separate MySQL DBMS deliverable containing database schema definitions and SQL reports. The Oracle scripts are maintained separately and are not currently integrated with the live Streamlit application's MySQL database.
 
 ## Project Scope
 
